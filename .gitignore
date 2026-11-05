@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Environment configurations
+.env
+.env.local
+.env.*.local
+frontend/.env
+backend/.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# SignBridge ML artifacts & raw datasets
+backend/data/raw/
+backend/models/*.joblib
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
