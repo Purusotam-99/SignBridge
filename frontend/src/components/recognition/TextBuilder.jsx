@@ -1,6 +1,6 @@
-// Purpose: Text Builder card with auto-appending textarea, Backspace, Clear, Copy, and Speak buttons
+// Purpose: Text Builder card with auto-appending textarea, visual flash on append, and speech/clipboard controls
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Copy, Check, Trash2, Delete, MessageSquare } from 'lucide-react';
+import { Volume2, VolumeX, Copy, Check, Trash2, Delete, MessageSquare, Sparkles } from 'lucide-react';
 import Card from '../common/Card';
 import IconButton from '../common/IconButton';
 import { useRecognitionContext } from '../../context/RecognitionContext';
@@ -11,7 +11,8 @@ export default function TextBuilder() {
     text,
     setText,
     backspaceText,
-    clearText
+    clearText,
+    flashNotification
   } = useRecognitionContext();
 
   const { speak, stop, isSpeaking, supported: speechSupported } = useSpeech();
@@ -41,9 +42,17 @@ export default function TextBuilder() {
       title="Text Builder"
       subtitle="Auto-appends recognized letters into words (e.g. C → A → B = CAB)"
       icon={<MessageSquare className="w-4 h-4 text-slate-600" />}
+      action={
+        flashNotification.active && (
+          <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-xs animate-bounce">
+            <Sparkles className="w-3 h-3" />
+            <span>Added '{flashNotification.letter}'</span>
+          </span>
+        )
+      }
       bodyClassName="p-4 sm:p-5 space-y-3"
     >
-      {/* Auto-appended Textarea */}
+      {/* Auto-appended Textarea with Green Border Flash */}
       <div className="relative">
         <textarea
           value={text}
@@ -51,9 +60,22 @@ export default function TextBuilder() {
           placeholder="Recognized letters will automatically assemble here (e.g. CAB)…"
           rows={3}
           aria-label="Constructed sign text"
-          className="w-full rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-base font-medium tracking-wider text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-colors resize-none shadow-inner"
+          className={`w-full rounded-lg p-3 font-mono text-base font-medium tracking-wider text-slate-800 placeholder-slate-400 focus:outline-none transition-all duration-300 resize-none shadow-inner ${
+            flashNotification.active
+              ? 'border-2 border-emerald-500 ring-4 ring-emerald-400/30 bg-emerald-50/30'
+              : 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:bg-white'
+          }`}
         />
-        {text.length > 0 && (
+
+        {/* Floating Success Pill on Textarea */}
+        {flashNotification.active && (
+          <div className="absolute top-2 right-2 flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300 shadow-xs">
+            <Check className="w-3 h-3 text-emerald-600" />
+            <span>Added '{flashNotification.letter}'</span>
+          </div>
+        )}
+
+        {text.length > 0 && !flashNotification.active && (
           <div className="absolute bottom-2 right-2 text-[10px] text-slate-400 font-mono">
             {text.length} chars
           </div>

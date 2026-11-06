@@ -4,7 +4,9 @@ import PageContainer from '../components/layout/PageContainer';
 import WebcamPanel from '../components/recognition/WebcamPanel';
 import PredictionPanel from '../components/recognition/PredictionPanel';
 import TextBuilder from '../components/recognition/TextBuilder';
+import GesturePreview from '../components/recognition/GesturePreview';
 import HistoryList from '../components/recognition/HistoryList';
+import DebugPanel from '../components/recognition/DebugPanel';
 import { useWebcam } from '../hooks/useWebcam';
 import { useRecognition } from '../hooks/useRecognition';
 import { useRecognitionContext } from '../context/RecognitionContext';
@@ -54,8 +56,8 @@ export default function Dashboard() {
 
       {/* Main Two-Column Grid (No card overlap) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Sign Language Input */}
-        <div className="lg:col-span-7">
+        {/* Left Column: Sign Language Input + Target Sign Reference */}
+        <div className="lg:col-span-7 space-y-5">
           <WebcamPanel
             videoRef={videoRef}
             canvasRef={canvasRef}
@@ -71,6 +73,10 @@ export default function Dashboard() {
             statusText={statusText}
             capturedThumbnail={capturedThumbnail}
           />
+
+          <GesturePreview
+            letter={activePrediction?.letter}
+          />
         </div>
 
         {/* Right Column, Stacked: Prediction Card + Text Builder */}
@@ -83,6 +89,9 @@ export default function Dashboard() {
           <TextBuilder />
         </div>
       </div>
+
+      {/* Debug Telemetry Panel (Activated via ?debug=1 or Header Debug button) */}
+      <DebugPanel />
 
       {/* Full-width Bottom Card: Recognition History */}
       <div className="w-full pt-1">

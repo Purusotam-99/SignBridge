@@ -28,69 +28,154 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("extract_features")
 
 
-def generate_calibrated_landmarks(label: str, count: int = 40) -> np.ndarray:
+def generate_calibrated_landmarks(label: str, count: int = 150) -> np.ndarray:
     """
     Generates realistic 3D geometric hand landmarks for ISL signs A, B, and C.
-    Provides a reproducible baseline for test suites before raw dataset images are placed.
+    Provides an anatomically accurate, diverse, and robust dataset covering:
+    - Scale variations (camera distance 0.65x to 1.35x)
+    - Left-hand and right-hand mirroring (50/50 balance)
+    - In-plane tilt (-25° to +25°) and 3D pitch/depth variations
+    - Realistic finger joint kinematics for fist (A), upright palm (B), and curved arch (C)
+    - Realistic thumb postures for B (folded across palm, tucked against index, relaxed)
+    - Monocular depth tracking noise
     """
     np.random.seed(42 + ord(label))
     samples = []
 
-    for _ in range(count):
-        landmarks = np.zeros((21, 3), dtype=np.float32)
-        landmarks[0] = [0.5, 0.8, 0.0]  # Wrist at origin
-        noise = np.random.normal(0, 0.012, (21, 3)).astype(np.float32)
+    for idx in range(count):
+        is_left_hand = (idx % 2 == 1)
+        scale = float(np.random.uniform(0.65, 1.35))
+        wrist_x = float(np.random.uniform(0.40, 0.60))
+        wrist_y = float(np.random.uniform(0.65, 0.85))
+        wrist_z = 0.0
+
+        lm = np.zeros((21, 3), dtype=np.float32)
+        lm[0] = [wrist_x, wrist_y, wrist_z]
+
+        palm_w = float(np.random.uniform(0.16, 0.24) * scale)
+        palm_h = float(np.random.uniform(0.20, 0.28) * scale)
+
+        angle_deg = float(np.random.uniform(-25.0, 25.0))
+        rad = np.radians(angle_deg)
+        cos_a, sin_a = float(np.cos(rad)), float(np.sin(rad))
+
+        hand_sign = -1.0 if is_left_hand else 1.0
+
+        # Knuckles (MCP): 5 (index), 9 (middle), 13 (ring), 17 (pinky)
+        mcp_rel = {
+            5:  np.array([-0.36 * palm_w * hand_sign, -palm_h * 0.95, np.random.uniform(-0.03, 0.03)]),
+            9:  np.array([-0.10 * palm_w * hand_sign, -palm_h * 1.00, np.random.uniform(-0.03, 0.03)]),
+            13: np.array([ 0.14 * palm_w * hand_sign, -palm_h * 0.95, np.random.uniform(-0.03, 0.03)]),
+            17: np.array([ 0.36 * palm_w * hand_sign, -palm_h * 0.85, np.random.uniform(-0.03, 0.03)]),
+        }
+
+        thumb_cmc_rel = np.array([-0.28 * palm_w * hand_sign, -palm_h * 0.35, np.random.uniform(-0.03, 0.03)])
+        thumb_mcp_rel = np.array([-0.42 * palm_w * hand_sign, -palm_h * 0.60, np.random.uniform(-0.03, 0.03)])
+
+        for k, v in mcp_rel.items():
+            lm[k] = [wrist_x + v[0] * cos_a - v[1] * sin_a, wrist_y + v[0] * sin_a + v[1] * cos_a, v[2]]
+
+        lm[1] = [wrist_x + thumb_cmc_rel[0] * cos_a - thumb_cmc_rel[1] * sin_a,
+                 wrist_y + thumb_cmc_rel[0] * sin_a + thumb_cmc_rel[1] * cos_a, thumb_cmc_rel[2]]
+        lm[2] = [wrist_x + thumb_mcp_rel[0] * cos_a - thumb_mcp_rel[1] * sin_a,
+                 wrist_y + thumb_mcp_rel[0] * sin_a + thumb_mcp_rel[1] * cos_a, thumb_mcp_rel[2]]
+
+        # Finger lengths
+        fl = {
+            5:  float(np.random.uniform(0.25, 0.36) * scale),
+            9:  float(np.random.uniform(0.28, 0.39) * scale),
+            13: float(np.random.uniform(0.25, 0.36) * scale),
+            17: float(np.random.uniform(0.19, 0.28) * scale),
+        }
+
+        # Pitch tilt (hand tilted forward/backward relative to camera plane)
+        pitch_tilt = float(np.random.uniform(-0.15, 0.15))
 
         if label == "A":
-            # Sign A: Closed fist, thumb straight up alongside index finger
-            landmarks[5] = [0.42, 0.55, 0.0]
-            landmarks[9] = [0.49, 0.53, 0.0]
-            landmarks[13] = [0.56, 0.55, 0.0]
-            landmarks[17] = [0.62, 0.59, 0.0]
-            landmarks[8] = [0.44, 0.63, 0.04]
-            landmarks[12] = [0.50, 0.63, 0.04]
-            landmarks[16] = [0.55, 0.64, 0.04]
-            landmarks[20] = [0.61, 0.65, 0.04]
-            landmarks[1] = [0.46, 0.72, -0.02]
-            landmarks[2] = [0.42, 0.65, -0.04]
-            landmarks[3] = [0.39, 0.56, -0.05]
-            landmarks[4] = [0.37, 0.47, -0.05]
+            # Sign A: Clenched fist. All 4 fingers curled into palm.
+            # Thumb straight up along side of index finger.
+            for base_idx, tip_idx in [(5, 8), (9, 12), (13, 16), (17, 20)]:
+                pip_idx = base_idx + 1
+                dip_idx = base_idx + 2
+                pip_off = np.array([0.0, -0.05 * scale, -0.04 * scale + pitch_tilt * 0.2])
+                dip_off = np.array([0.0,  0.03 * scale,  0.03 * scale + pitch_tilt * 0.5])
+                tip_off = np.array([0.0,  0.09 * scale,  0.02 * scale + pitch_tilt * 0.7])
+
+                lm[pip_idx] = lm[base_idx] + pip_off
+                lm[dip_idx] = lm[base_idx] + dip_off
+                lm[tip_idx] = lm[base_idx] + tip_off
+
+            # Thumb pointing straight UP alongside index knuckle
+            thumb_ip_rel = thumb_mcp_rel + np.array([0.04 * hand_sign, -0.12 * scale, 0.02])
+            thumb_tip_rel = thumb_ip_rel + np.array([0.02 * hand_sign, -0.14 * scale, 0.01])
+            lm[3] = [wrist_x + thumb_ip_rel[0] * cos_a - thumb_ip_rel[1] * sin_a,
+                     wrist_y + thumb_ip_rel[0] * sin_a + thumb_ip_rel[1] * cos_a, thumb_ip_rel[2]]
+            lm[4] = [wrist_x + thumb_tip_rel[0] * cos_a - thumb_tip_rel[1] * sin_a,
+                     wrist_y + thumb_tip_rel[0] * sin_a + thumb_tip_rel[1] * cos_a, thumb_tip_rel[2]]
 
         elif label == "B":
-            # Sign B: Flat open palm, fingers straight up, thumb tucked across
-            landmarks[5] = [0.44, 0.55, 0.0]
-            landmarks[9] = [0.50, 0.53, 0.0]
-            landmarks[13] = [0.56, 0.55, 0.0]
-            landmarks[17] = [0.62, 0.58, 0.0]
-            landmarks[8] = [0.43, 0.24, -0.01]
-            landmarks[12] = [0.50, 0.21, -0.01]
-            landmarks[16] = [0.57, 0.25, -0.01]
-            landmarks[20] = [0.63, 0.31, -0.01]
-            landmarks[1] = [0.46, 0.72, 0.02]
-            landmarks[2] = [0.47, 0.65, 0.04]
-            landmarks[3] = [0.49, 0.60, 0.05]
-            landmarks[4] = [0.52, 0.58, 0.05]
+            # Sign B: Flat open palm, 4 fingers extended straight up.
+            # Natural finger spread (from tightly together to slightly fanned)
+            spread = float(np.random.uniform(-0.01, 0.04) * hand_sign)
+
+            for i, (base_idx, tip_idx) in enumerate([(5, 8), (9, 12), (13, 16), (17, 20)]):
+                pip_idx = base_idx + 1
+                dip_idx = base_idx + 2
+                f_len = fl[base_idx]
+                dx_spread = (i - 1.5) * spread
+
+                dir_vec = np.array([dx_spread, -f_len, pitch_tilt])
+                rot_dir = np.array([dir_vec[0] * cos_a - dir_vec[1] * sin_a,
+                                    dir_vec[0] * sin_a + dir_vec[1] * cos_a,
+                                    dir_vec[2]])
+
+                lm[pip_idx] = lm[base_idx] + rot_dir * 0.38
+                lm[dip_idx] = lm[base_idx] + rot_dir * 0.72
+                lm[tip_idx] = lm[base_idx] + rot_dir * 1.00
+
+            # Thumb in Sign B: Folded across palm, tucked flush against index, or relaxed
+            thumb_style = np.random.choice(["folded", "tucked", "relaxed"], p=[0.5, 0.3, 0.2])
+            if thumb_style == "folded":
+                t3 = thumb_mcp_rel + np.array([0.08 * hand_sign, -0.03 * scale, 0.04])
+                t4 = t3 + np.array([0.08 * hand_sign, -0.01 * scale, 0.04])
+            elif thumb_style == "tucked":
+                t3 = thumb_mcp_rel + np.array([0.04 * hand_sign, -0.08 * scale, 0.02])
+                t4 = t3 + np.array([0.03 * hand_sign, -0.08 * scale, 0.01])
+            else:
+                t3 = thumb_mcp_rel + np.array([-0.06 * hand_sign, -0.08 * scale, 0.02])
+                t4 = t3 + np.array([-0.06 * hand_sign, -0.07 * scale, 0.01])
+
+            lm[3] = [wrist_x + t3[0] * cos_a - t3[1] * sin_a, wrist_y + t3[0] * sin_a + t3[1] * cos_a, t3[2]]
+            lm[4] = [wrist_x + t4[0] * cos_a - t4[1] * sin_a, wrist_y + t4[0] * sin_a + t4[1] * cos_a, t4[2]]
 
         elif label == "C":
-            # Sign C: Fingers and thumb curved into an open C-shape arch
-            landmarks[5] = [0.43, 0.54, 0.0]
-            landmarks[9] = [0.49, 0.52, 0.0]
-            landmarks[13] = [0.55, 0.54, 0.0]
-            landmarks[17] = [0.61, 0.58, 0.0]
-            landmarks[8] = [0.38, 0.37, -0.08]
-            landmarks[12] = [0.44, 0.35, -0.08]
-            landmarks[16] = [0.50, 0.37, -0.08]
-            landmarks[20] = [0.56, 0.41, -0.08]
-            landmarks[1] = [0.47, 0.73, -0.02]
-            landmarks[2] = [0.43, 0.67, -0.04]
-            landmarks[3] = [0.40, 0.59, -0.06]
-            landmarks[4] = [0.38, 0.49, -0.08]
+            # Sign C: Fingers and thumb curved into an open C-shape arch.
+            # Fingertips curve forward and down towards the thumb.
+            for base_idx, tip_idx in [(5, 8), (9, 12), (13, 16), (17, 20)]:
+                pip_idx = base_idx + 1
+                dip_idx = base_idx + 2
+                f_len = fl[base_idx] * 0.60
 
-        for base, mid1, mid2, tip in [(1, 2, 3, 4), (5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20)]:
-            landmarks[mid1] = landmarks[base] + (landmarks[tip] - landmarks[base]) * 0.33
-            landmarks[mid2] = landmarks[base] + (landmarks[tip] - landmarks[base]) * 0.66
+                pip_off = np.array([0.02 * hand_sign, -f_len * 0.70, -0.08 * scale + pitch_tilt * 0.3])
+                dip_off = np.array([0.04 * hand_sign, -f_len * 0.40, -0.12 * scale + pitch_tilt * 0.6])
+                tip_off = np.array([0.05 * hand_sign, -f_len * 0.15, -0.09 * scale + pitch_tilt * 0.8])
 
-        samples.append(landmarks + noise)
+                r_pip = np.array([pip_off[0] * cos_a - pip_off[1] * sin_a, pip_off[0] * sin_a + pip_off[1] * cos_a, pip_off[2]])
+                r_dip = np.array([dip_off[0] * cos_a - dip_off[1] * sin_a, dip_off[0] * sin_a + dip_off[1] * cos_a, dip_off[2]])
+                r_tip = np.array([tip_off[0] * cos_a - tip_off[1] * sin_a, tip_off[0] * sin_a + tip_off[1] * cos_a, tip_off[2]])
+
+                lm[pip_idx] = lm[base_idx] + r_pip
+                lm[dip_idx] = lm[base_idx] + r_dip
+                lm[tip_idx] = lm[base_idx] + r_tip
+
+            # Thumb curves upward to form the bottom curve of the C
+            t3 = thumb_mcp_rel + np.array([0.04 * hand_sign, -0.08 * scale, -0.06 * scale])
+            t4 = t3 + np.array([0.05 * hand_sign, -0.06 * scale, -0.06 * scale])
+            lm[3] = [wrist_x + t3[0] * cos_a - t3[1] * sin_a, wrist_y + t3[0] * sin_a + t3[1] * cos_a, t3[2]]
+            lm[4] = [wrist_x + t4[0] * cos_a - t4[1] * sin_a, wrist_y + t4[0] * sin_a + t4[1] * cos_a, t4[2]]
+
+        noise = np.random.normal(0, 0.008, (21, 3)).astype(np.float32)
+        samples.append(lm + noise)
 
     return np.array(samples)
 
@@ -176,8 +261,8 @@ def extract_features():
                 stats[label]["skipped"] += 1
 
         # Synthesize geometric landmarks if dataset images are absent or below minimum
-        if stats[label]["used"] < 30:
-            needed = 45 - stats[label]["used"]
+        if stats[label]["used"] < 100:
+            needed = 150 - stats[label]["used"]
             logger.info("Class '%s': Adding %d calibrated geometric samples...", label, needed)
             synth_samples = generate_calibrated_landmarks(label, count=needed)
             for idx, sample in enumerate(synth_samples):

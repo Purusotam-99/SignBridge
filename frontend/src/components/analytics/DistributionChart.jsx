@@ -19,14 +19,16 @@ export default function DistributionChart({
   isPending = false
 }) {
   const chartData = SUPPORTED_LETTERS.map((cls) => {
-    const stats = classReport && classReport[cls] ? classReport[cls] : null;
+    const stats = (classReport && (classReport[cls] || classReport[`Sign ${cls}`])) || null;
     return {
       name: `Sign ${cls}`,
-      Precision: stats ? Math.round((stats.precision || 0) * 100) : 0,
-      Recall: stats ? Math.round((stats.recall || 0) * 100) : 0,
-      F1: stats ? Math.round((stats['f1-score'] || 0) * 100) : 0
+      Precision: stats ? Math.round(((stats.precision ?? 0)) * 100) : 0,
+      Recall: stats ? Math.round(((stats.recall ?? 0)) * 100) : 0,
+      F1: stats ? Math.round(((stats['f1-score'] ?? stats.f1 ?? stats.f1_score ?? 0)) * 100) : 0
     };
   });
+
+  const hasData = Boolean(classReport && Object.keys(classReport).length > 0);
 
   return (
     <Card
@@ -35,7 +37,7 @@ export default function DistributionChart({
       icon={<BarChart3 className="w-4 h-4 text-slate-600" />}
       bodyClassName="p-4 sm:p-5"
     >
-      {isPending || !classReport ? (
+      {isPending || !hasData ? (
         <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50/70 border border-dashed border-slate-200 rounded-xl p-6">
           <AlertCircle className="w-6 h-6 text-amber-500 mb-2" />
           <h4 className="text-sm font-semibold text-slate-800">Evaluation pending</h4>

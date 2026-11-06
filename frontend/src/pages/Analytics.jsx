@@ -33,6 +33,11 @@ export default function Analytics() {
   const isAvailable = Boolean(metrics?.available && typeof metrics?.accuracy === 'number');
   const isPending = !isAvailable;
 
+  const macroPrecision = metrics?.macro_precision ?? metrics?.precision;
+  const macroRecall = metrics?.macro_recall ?? metrics?.recall;
+  const macroF1 = metrics?.macro_f1 ?? metrics?.f1;
+  const classReport = metrics?.classification_report ?? metrics?.per_class;
+
   const formatPct = (val) => {
     if (typeof val !== 'number') return '--';
     return `${Math.round(val * 1000) / 10}%`;
@@ -77,21 +82,21 @@ export default function Analytics() {
           />
           <MetricCard
             title="Macro Precision"
-            value={formatPct(metrics?.macro_precision)}
+            value={formatPct(macroPrecision)}
             description="Average exactness across classes"
             icon={<Target className="w-4 h-4 text-indigo-600" />}
             isPending={isPending}
           />
           <MetricCard
             title="Macro Recall"
-            value={formatPct(metrics?.macro_recall)}
+            value={formatPct(macroRecall)}
             description="Average sensitivity across signs"
             icon={<Crosshair className="w-4 h-4 text-sky-600" />}
             isPending={isPending}
           />
           <MetricCard
             title="Macro F1-Score"
-            value={formatPct(metrics?.macro_f1)}
+            value={formatPct(macroF1)}
             description="Harmonic balance of precision & recall"
             icon={<CheckCircle2 className="w-4 h-4 text-purple-600" />}
             isPending={isPending}
@@ -110,7 +115,7 @@ export default function Analytics() {
 
           <div className="lg:col-span-6">
             <DistributionChart
-              classReport={metrics?.classification_report}
+              classReport={classReport}
               isPending={isPending}
             />
           </div>

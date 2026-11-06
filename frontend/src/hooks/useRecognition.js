@@ -1,15 +1,12 @@
-// Purpose: Hook running continuous frame capture, prediction loop, and anti-spam auto-append
+// Purpose: Hook running self-scheduling frame capture, prediction loop, and hold-to-confirm
 import { useEffect, useRef, useCallback } from 'react';
 import { useRecognitionContext } from '../context/RecognitionContext';
+import { useHoldToConfirm } from './useHoldToConfirm';
 import { predict } from '../api/client';
 import { captureFrame } from '../utils/captureFrame';
 import { drawLandmarks } from '../utils/drawLandmarks';
-import { formatConfidencePercent } from '../utils/confidence';
-import {
-  FRAME_INTERVAL_MS,
-  CONFIDENCE_THRESHOLDS,
-  AUTO_APPEND_CONSECUTIVE_FRAMES
-} from '../config/constants';
+import { normalizeConfidenceScore } from '../utils/confidence';
+import { FRAME_INTERVAL_MS, HOLD_DURATION_MS } from '../config/constants';
 
 export function useRecognition(videoRef, canvasRef) {
   const {
@@ -21,29 +18,51 @@ export function useRecognition(videoRef, canvasRef) {
     showLandmarks,
     isDemoActive,
     setCapturedThumbnail,
-    setStatusText
+    setStatusText,
+    setHoldState,
+    triggerAppendFlash,
+    setDebugInfo,
+    setErrorMessage
   } = useRecognitionContext();
 
-  const isProcessingRef = useRef(false);
-  const consecutiveLetterRef = useRef({ letter: null, count: 0 });
-  const lockedRef = useRef(false); // Locked until gap occurs
+  const isRecognizingRef = useRef(false);
+  const inFlightRef = useRef(false);
+  const loopTimeoutRef = useRef(null);
 
+  // Callback when a letter has been held for 2.0s
+  const handleAppendConfirmed = useCallback((letter, result) => {
+    appendText(letter);
+    addToHistory(result);
+    triggerAppendFlash(letter);
+  }, [appendText, addToHistory, triggerAppendFlash]);
+
+  const { evaluateFrame, reset: resetHold } = useHoldToConfirm(handleAppendConfirmed);
+
+  // Process a single frame cycle: capture -> API -> hold logic
   const processFrame = useCallback(async () => {
-    // Skip this tick if previous API call is still pending
-    if (isProcessingRef.current) return;
+    if (!isRecognizingRef.current) return;
+    if (inFlightRef.current) return;
     if (!videoRef?.current) return;
 
     const frameBase64 = captureFrame(videoRef.current);
     if (!frameBase64) return;
 
-    isProcessingRef.current = true;
+    inFlightRef.current = true;
     setCapturedThumbnail(frameBase64);
     setStatusText('Processing ISL predictions…');
+    setErrorMessage(null);
 
+    const startFetch = performance.now();
     try {
       const result = await predict(frameBase64, isDemoActive);
+      const latencyMs = Math.round(performance.now() - startFetch);
 
-      // Draw or clear landmarks based on toggle
+      // Rule 8: Abort or ignore responses that arrive after Stop was pressed
+      if (!isRecognizingRef.current) {
+        return;
+      }
+
+      // Draw landmarks on overlay canvas
       if (canvasRef?.current) {
         if (showLandmarks && result.landmarks && result.landmarks.length > 0) {
           drawLandmarks(canvasRef.current, result.landmarks);
@@ -52,83 +71,112 @@ export function useRecognition(videoRef, canvasRef) {
         }
       }
 
-      // Update active prediction
+      // Update active prediction state
       setActivePrediction(result);
 
-      // Update one-line status
-      if (result.hand_detected && result.letter) {
-        setStatusText(`Successfully predicted letter '${result.letter}' (${formatConfidencePercent(result.confidence)})`);
-      } else {
-        setStatusText('No hand detected');
-      }
+      // Run unified hold-to-confirm logic (used identically for both demo & real mode)
+      const holdEval = evaluateFrame(result);
+      setHoldState(holdEval);
 
-      // Auto-append logic with required hand-removed or letter-change gap
-      const isHighConfidence =
-        result.hand_detected &&
-        result.letter &&
-        result.confidence >= CONFIDENCE_THRESHOLDS.HIGH;
+      // Update live status line
+      setStatusText(holdEval.statusReason);
 
-      if (isHighConfidence) {
-        if (consecutiveLetterRef.current.letter === result.letter) {
-          consecutiveLetterRef.current.count += 1;
-        } else {
-          // Different letter detected: reset counter and unlock
-          consecutiveLetterRef.current = { letter: result.letter, count: 1 };
-          lockedRef.current = false;
-        }
-
-        // Trigger append when threshold reached and not locked
-        if (
-          !lockedRef.current &&
-          consecutiveLetterRef.current.count >= AUTO_APPEND_CONSECUTIVE_FRAMES
-        ) {
-          appendText(result.letter);
-          addToHistory(result);
-          // Lock further appends of this held sign until hand moves away or changes
-          lockedRef.current = true;
-        }
-      } else {
-        // Hand removed or low confidence: reset count and release lock gap
-        consecutiveLetterRef.current = { letter: null, count: 0 };
-        lockedRef.current = false;
-      }
+      // Update live debug metrics
+      setDebugInfo({
+        rawResponse: result,
+        normalizedConfidence: normalizeConfidenceScore(result.confidence),
+        candidate: holdEval.candidate,
+        heldMs: holdEval.heldMs,
+        isLocked: holdEval.isLocked,
+        latencyMs,
+        lastDecision: holdEval.lastDecision
+      });
     } catch (err) {
+      if (!isRecognizingRef.current) return;
+
+      const latencyMs = Math.round(performance.now() - startFetch);
       console.warn('Frame prediction error:', err.message);
-      setStatusText(`Error: ${err.message}`);
+
+      // Surface error visibly in the UI
+      setErrorMessage(err.message);
+      setStatusText(`Backend error: ${err.message}`);
+
       if (canvasRef?.current) {
         drawLandmarks(canvasRef.current, []);
       }
+
+      // Evaluate hold with null to safely manage dropout grace
+      const holdEval = evaluateFrame(null);
+      setHoldState(holdEval);
+
+      setDebugInfo((prev) => ({
+        ...prev,
+        latencyMs,
+        lastDecision: `Request error: ${err.message}`
+      }));
     } finally {
-      isProcessingRef.current = false;
+      inFlightRef.current = false;
     }
   }, [
     videoRef,
     canvasRef,
     isDemoActive,
     showLandmarks,
+    evaluateFrame,
     setActivePrediction,
     setCapturedThumbnail,
     setStatusText,
-    appendText,
-    addToHistory
+    setHoldState,
+    setDebugInfo,
+    setErrorMessage
   ]);
 
-  // Frame polling interval (~500ms)
+  // Rule 7: Self-scheduling loop (capture -> await API -> hold logic -> setTimeout)
   useEffect(() => {
+    isRecognizingRef.current = isRecognizing;
+
     if (!isRecognizing) {
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
+      resetHold();
+      setHoldState({
+        candidate: null,
+        progress: 0,
+        heldMs: 0,
+        requiredMs: HOLD_DURATION_MS,
+        isLocked: false,
+        statusReason: 'Camera idle',
+        lastDecision: 'Stopped'
+      });
       if (canvasRef?.current) {
         drawLandmarks(canvasRef.current, []);
       }
-      setStatusText('Recognition paused');
+      setStatusText('Recognition stopped');
       return;
     }
 
-    const intervalId = setInterval(() => {
-      processFrame();
-    }, FRAME_INTERVAL_MS);
+    let isMounted = true;
 
-    return () => clearInterval(intervalId);
-  }, [isRecognizing, processFrame, canvasRef, setStatusText]);
+    const scheduleNext = async () => {
+      if (!isMounted || !isRecognizingRef.current) return;
+      await processFrame();
+      if (isMounted && isRecognizingRef.current) {
+        loopTimeoutRef.current = setTimeout(scheduleNext, FRAME_INTERVAL_MS);
+      }
+    };
+
+    // Kick off initial cycle immediately
+    scheduleNext();
+
+    return () => {
+      isMounted = false;
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+      }
+    };
+  }, [isRecognizing, processFrame, resetHold, setHoldState, canvasRef, setStatusText]);
 
   const startRecognition = useCallback(() => {
     setIsRecognizing(true);
@@ -136,14 +184,18 @@ export function useRecognition(videoRef, canvasRef) {
   }, [setIsRecognizing, setStatusText]);
 
   const stopRecognition = useCallback(() => {
+    isRecognizingRef.current = false;
     setIsRecognizing(false);
-    consecutiveLetterRef.current = { letter: null, count: 0 };
-    lockedRef.current = false;
+    if (loopTimeoutRef.current) {
+      clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = null;
+    }
+    resetHold();
     if (canvasRef?.current) {
       drawLandmarks(canvasRef.current, []);
     }
     setStatusText('Recognition stopped');
-  }, [setIsRecognizing, canvasRef, setStatusText]);
+  }, [setIsRecognizing, resetHold, canvasRef, setStatusText]);
 
   const toggleRecognition = useCallback(() => {
     if (isRecognizing) {

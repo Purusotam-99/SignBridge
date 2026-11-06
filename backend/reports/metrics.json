@@ -4,21 +4,24 @@
   "precision": 1.0,
   "recall": 1.0,
   "f1": 1.0,
+  "macro_precision": 1.0,
+  "macro_recall": 1.0,
+  "macro_f1": 1.0,
   "confusion_matrix": [
     [
-      9,
+      30,
       0,
       0
     ],
     [
       0,
-      9,
+      30,
       0
     ],
     [
       0,
       0,
-      9
+      30
     ]
   ],
   "labels": [
@@ -26,26 +29,57 @@
     "B",
     "C"
   ],
-  "test_samples": 27,
+  "classes": [
+    "A",
+    "B",
+    "C"
+  ],
+  "test_samples": 90,
   "per_class": {
     "A": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "support": 9
+      "f1-score": 1.0,
+      "support": 30
     },
     "B": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "support": 9
+      "f1-score": 1.0,
+      "support": 30
     },
     "C": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "support": 9
+      "f1-score": 1.0,
+      "support": 30
     }
   },
-  "generated_at": "2026-11-05T05:10:14.558949+00:00"
+  "classification_report": {
+    "A": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "f1-score": 1.0,
+      "support": 30
+    },
+    "B": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "f1-score": 1.0,
+      "support": 30
+    },
+    "C": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "f1-score": 1.0,
+      "support": 30
+    }
+  },
+  "generated_at": "2026-11-05T10:07:25.818690+00:00"
 }

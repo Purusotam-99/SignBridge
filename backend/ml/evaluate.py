@@ -120,10 +120,11 @@ def evaluate_pipeline():
                 "precision": float(round(stats["precision"], 4)),
                 "recall": float(round(stats["recall"], 4)),
                 "f1": float(round(stats["f1-score"], 4)),
+                "f1-score": float(round(stats["f1-score"], 4)),
                 "support": int(stats["support"])
             }
         else:
-            per_class[lbl] = {"precision": 0.0, "recall": 0.0, "f1": 0.0, "support": 0}
+            per_class[lbl] = {"precision": 0.0, "recall": 0.0, "f1": 0.0, "f1-score": 0.0, "support": 0}
 
     # 5. Build JSON payload strictly matching required schema
     metrics_payload = {
@@ -132,10 +133,15 @@ def evaluate_pipeline():
         "precision": float(round(float(prec), 4)),
         "recall": float(round(float(rec), 4)),
         "f1": float(round(float(f1), 4)),
+        "macro_precision": float(round(float(prec), 4)),
+        "macro_recall": float(round(float(rec), 4)),
+        "macro_f1": float(round(float(f1), 4)),
         "confusion_matrix": cm.tolist(),
         "labels": LABELS,
+        "classes": LABELS,
         "test_samples": int(len(y_test)),
         "per_class": per_class,
+        "classification_report": per_class,
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
 

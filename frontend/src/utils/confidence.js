@@ -1,17 +1,32 @@
 // Purpose: Helper utility mapping numerical confidence to tiers (High, Medium, Low)
-import { CONFIDENCE_THRESHOLDS } from '../config/constants';
+import { CONFIDENCE_THRESHOLDS } from '../config/constants.js';
+
+/**
+ * Normalizes confidence score: if > 1, divides by 100 to guarantee 0.0 - 1.0 float.
+ * @param {number} score
+ * @returns {number}
+ */
+export function normalizeConfidenceScore(score = 0) {
+  if (typeof score !== 'number' || isNaN(score)) return 0;
+  let normalized = score;
+  if (normalized > 1) {
+    normalized = normalized / 100;
+  }
+  return Math.max(0, Math.min(1, normalized));
+}
 
 /**
  * Returns the tier label based on numerical confidence score.
- * High: >= 80%, Medium: 50% - 79%, Low: < 50%
+ * High: >= 80%, Medium: 60% - 79%, Low: < 60%
  * @param {number} score - Float between 0.0 and 1.0
  * @returns {'High' | 'Medium' | 'Low'}
  */
 export function getConfidenceTier(score = 0) {
-  if (score >= CONFIDENCE_THRESHOLDS.HIGH) {
+  const norm = normalizeConfidenceScore(score);
+  if (norm >= CONFIDENCE_THRESHOLDS.HIGH) {
     return 'High';
   }
-  if (score >= CONFIDENCE_THRESHOLDS.MEDIUM) {
+  if (norm >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return 'Medium';
   }
   return 'Low';

@@ -25,6 +25,45 @@ export function RecognitionProvider({ children }) {
   // Text builder state
   const [text, setText] = useState('');
 
+  // Hold-to-confirm visual state
+  const [holdState, setHoldState] = useState({
+    candidate: null,
+    progress: 0,
+    heldMs: 0,
+    requiredMs: 2000,
+    isLocked: false,
+    statusReason: 'Camera idle',
+    lastDecision: 'Initialized'
+  });
+
+  // Flash border notification state on append
+  const [flashNotification, setFlashNotification] = useState({
+    active: false,
+    letter: null
+  });
+
+  // Live debug panel state (activated via ?debug=1 or toggle button)
+  const [isDebugMode, setIsDebugMode] = useState(() => {
+    try {
+      return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const [debugInfo, setDebugInfo] = useState({
+    rawResponse: null,
+    normalizedConfidence: 0,
+    candidate: null,
+    heldMs: 0,
+    isLocked: false,
+    latencyMs: 0,
+    lastDecision: 'Ready'
+  });
+
+  // Visible error state (for 503, network, CORS)
+  const [errorMessage, setErrorMessage] = useState(null);
+
   // Recognition history log
   const [history, setHistory] = useState([]);
 
@@ -109,6 +148,14 @@ export function RecognitionProvider({ children }) {
     setText('');
   }, []);
 
+  // Trigger temporary visual green border flash and toast on text append
+  const triggerAppendFlash = useCallback((letter) => {
+    setFlashNotification({ active: true, letter });
+    setTimeout(() => {
+      setFlashNotification({ active: false, letter: null });
+    }, 1500);
+  }, []);
+
   const value = {
     // Prediction state
     activePrediction,
@@ -124,6 +171,22 @@ export function RecognitionProvider({ children }) {
     setCapturedThumbnail,
     statusText,
     setStatusText,
+
+    // Hold to confirm state
+    holdState,
+    setHoldState,
+    flashNotification,
+    triggerAppendFlash,
+
+    // Live debug panel state
+    isDebugMode,
+    setIsDebugMode,
+    debugInfo,
+    setDebugInfo,
+
+    // Surfaceable errors
+    errorMessage,
+    setErrorMessage,
 
     // Text builder state
     text,

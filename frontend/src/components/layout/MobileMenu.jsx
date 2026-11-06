@@ -7,7 +7,13 @@ export default function MobileMenu({ isOpen, onClose, links, isDemoActive }) {
   if (!isOpen) return null;
 
   return (
-    <div className="md:hidden border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 pt-2 pb-4 space-y-2 shadow-sm">
+    <div className="md:hidden border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 pt-3 pb-4 space-y-3 shadow-sm">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <img src="/logo.png" alt="SignBridge Logo" className="h-6 w-auto object-contain" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+          ISL
+        </span>
+      </div>
       <nav className="flex flex-col space-y-1">
         {links.map((link) => (
           <NavLink

@@ -6,6 +6,7 @@ import PredictionPanel from '../components/recognition/PredictionPanel';
 import TextBuilder from '../components/recognition/TextBuilder';
 import GesturePreview from '../components/recognition/GesturePreview';
 import HistoryList from '../components/recognition/HistoryList';
+import DebugPanel from '../components/recognition/DebugPanel';
 import { useWebcam } from '../hooks/useWebcam';
 import { useRecognition } from '../hooks/useRecognition';
 import { useRecognitionContext } from '../context/RecognitionContext';
@@ -55,7 +56,7 @@ export default function LiveRecognition() {
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Larger Webcam View + Text Builder */}
+        {/* Left Column: Larger Webcam View + Target Sign Reference + Text Builder */}
         <div className="lg:col-span-8 space-y-5">
           <WebcamPanel
             videoRef={videoRef}
@@ -73,22 +74,26 @@ export default function LiveRecognition() {
             capturedThumbnail={capturedThumbnail}
           />
 
+          <GesturePreview
+            letter={activePrediction?.letter}
+          />
+
           <TextBuilder />
         </div>
 
-        {/* Right Column: Prediction Panel, Reference Preview, and Live History */}
+        {/* Right Column: Prediction Panel and Live History */}
         <div className="lg:col-span-4 space-y-5">
           <PredictionPanel
             prediction={activePrediction}
             isRecognizing={isRecognizing}
           />
 
-          <GesturePreview
-            letter={activePrediction?.letter}
-          />
-
           <HistoryList />
         </div>
+      </div>
+
+      <div className="pt-4">
+        <DebugPanel />
       </div>
     </PageContainer>
   );

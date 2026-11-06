@@ -71,10 +71,10 @@
     "f61",
     "f62"
   ],
-  "training_date": "2026-11-05T04:54:00.476783Z",
-  "train_samples_raw": 108,
-  "train_samples_augmented": 432,
-  "test_samples_count": 27,
+  "training_date": "2026-11-05T09:17:41.205200+00:00",
+  "train_samples_raw": 360,
+  "train_samples_augmented": 1440,
+  "test_samples_count": 90,
   "cv_mean_accuracy": 1.0,
   "cv_std_accuracy": 0.0,
   "best_hyperparameters": {
